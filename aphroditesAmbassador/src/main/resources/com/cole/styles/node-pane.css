@@ -1,126 +1,124 @@
-/*
- * Styles for a movable, editable node-like pane in JavaFX.
- *
- * Suggested style classes:
- * - root pane: "node-pane"
- * - header/title bar: "node-header"
- * - title label or text field: "node-title"
- * - editable content region: "node-body"
- * - selected state: add "selected"
- * - dragging state: add "dragging"
- */
-
-.root {
-    -fx-background-color: linear-gradient(to bottom, #eef4ff 0%, #dbe7ff 100%);
+.root,
+.editor-root {
+    -fx-background-color:
+        radial-gradient(center 15% 15%, radius 120%, #20293d 0%, #131826 48%, #0a0f1a 100%);
 }
 
 .node-pane {
-    -fx-background-color:
-        linear-gradient(to bottom, #ffffff 0%, #f5f8ff 100%);
-    -fx-background-radius: 18;
-    -fx-border-color: #9db8f5;
-    -fx-border-radius: 18;
-    -fx-border-width: 1.5;
-    -fx-padding: 0;
-    -fx-effect: dropshadow(gaussian, rgba(27, 52, 99, 0.18), 18, 0.22, 0, 8);
-    -fx-min-width: 220;
-    -fx-min-height: 140;
-}
-
-.node-pane:hover {
-    -fx-border-color: #6f98ef;
-    -fx-effect: dropshadow(gaussian, rgba(27, 52, 99, 0.24), 24, 0.24, 0, 10);
-}
-
-.node-pane.selected {
-    -fx-border-color: #2f6fed;
-    -fx-border-width: 2;
-    -fx-effect: dropshadow(gaussian, rgba(47, 111, 237, 0.28), 26, 0.26, 0, 10);
-}
-
-.node-pane.dragging {
-    -fx-opacity: 0.94;
-    -fx-rotate: -1;
-    -fx-effect: dropshadow(gaussian, rgba(30, 49, 87, 0.32), 30, 0.28, 0, 14);
+    -fx-background-color: linear-gradient(to bottom, rgba(31, 39, 58, 0.96), rgba(18, 24, 38, 0.98));
+    -fx-background-radius: 22;
+    -fx-border-color: rgba(126, 154, 255, 0.34);
+    -fx-border-radius: 22;
+    -fx-border-width: 1.2;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.48), 30, 0.24, 0, 14);
 }
 
 .node-header {
-    -fx-background-color: linear-gradient(to right, #2f6fed 0%, #5f91f2 100%);
-    -fx-background-radius: 18 18 0 0;
-    -fx-padding: 12 16 12 16;
-    -fx-border-color: transparent transparent rgba(255, 255, 255, 0.35) transparent;
-    -fx-border-width: 0 0 1 0;
+    -fx-background-color: linear-gradient(to right, #67c6ff 0%, #7b8cff 100%);
+    -fx-background-radius: 22 22 0 0;
+    -fx-cursor: move;
 }
 
 .node-title {
-    -fx-text-fill: white;
-    -fx-font-size: 15px;
-    -fx-font-weight: 700;
-}
-
-.node-title.text-field {
-    -fx-background-color: rgba(255, 255, 255, 0.18);
-    -fx-background-radius: 10;
-    -fx-prompt-text-fill: rgba(255, 255, 255, 0.72);
-    -fx-highlight-fill: rgba(255, 255, 255, 0.35);
-    -fx-highlight-text-fill: white;
-    -fx-border-color: rgba(255, 255, 255, 0.28);
-    -fx-border-radius: 10;
-    -fx-text-fill: white;
-}
-
-.node-title.text-field:focused {
-    -fx-background-color: rgba(255, 255, 255, 0.26);
-    -fx-border-color: white;
+    -fx-text-fill: #0f1422;
+    -fx-font-size: 16px;
+    -fx-font-weight: 800;
 }
 
 .node-body {
-    -fx-background-color: rgba(255, 255, 255, 0.72);
-    -fx-background-radius: 0 0 18 18;
-    -fx-padding: 14;
-    -fx-spacing: 10;
+    -fx-background-color: transparent;
 }
 
 .node-body .label {
-    -fx-text-fill: #294067;
+    -fx-text-fill: #d8e0f6;
     -fx-font-size: 13px;
+}
+
+.section-label {
+    -fx-font-size: 11px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #8ea3d9;
+    -fx-letter-spacing: 0.8px;
 }
 
 .node-body .text-field,
 .node-body .text-area {
-    -fx-background-color: #ffffff;
-    -fx-background-radius: 12;
-    -fx-border-color: #bfd0f7;
-    -fx-border-radius: 12;
-    -fx-border-width: 1.2;
-    -fx-text-fill: #1f2f4d;
-    -fx-prompt-text-fill: #7a8ba8;
+    -fx-background-color: rgba(10, 15, 26, 0.92);
+    -fx-background-radius: 14;
+    -fx-border-color: rgba(126, 154, 255, 0.28);
+    -fx-border-radius: 14;
+    -fx-border-width: 1.1;
+    -fx-text-fill: #edf3ff;
+    -fx-prompt-text-fill: #7382a8;
+    -fx-highlight-fill: #67c6ff;
+    -fx-highlight-text-fill: #08111d;
     -fx-padding: 10 12 10 12;
 }
 
 .node-body .text-field:focused,
 .node-body .text-area:focused {
-    -fx-border-color: #2f6fed;
-    -fx-effect: dropshadow(gaussian, rgba(47, 111, 237, 0.14), 12, 0.16, 0, 0);
-}
-
-.node-body .text-area .content {
-    -fx-background-color: transparent;
-    -fx-background-radius: 12;
+    -fx-border-color: #7bc6ff;
+    -fx-effect: dropshadow(gaussian, rgba(103, 198, 255, 0.2), 14, 0.18, 0, 0);
 }
 
 .node-body .button {
-    -fx-background-color: #2f6fed;
-    -fx-background-radius: 10;
-    -fx-text-fill: white;
-    -fx-font-weight: 700;
+    -fx-background-color: linear-gradient(to right, #5ed1ff 0%, #6689ff 100%);
+    -fx-background-radius: 12;
+    -fx-text-fill: #0c1321;
+    -fx-font-weight: 800;
     -fx-padding: 8 14 8 14;
 }
 
 .node-body .button:hover {
-    -fx-background-color: #255fce;
+    -fx-background-color: linear-gradient(to right, #78daff 0%, #7a9aff 100%);
 }
 
 .node-body .button:pressed {
-    -fx-background-color: #1e4fae;
+    -fx-background-color: linear-gradient(to right, #4bbce8 0%, #5576df 100%);
+}
+
+.secondary-button {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-text-fill: #d9e1f8;
+    -fx-border-color: rgba(255, 255, 255, 0.08);
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+}
+
+.secondary-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.14);
+}
+
+.output-row {
+    -fx-background-color: rgba(255, 255, 255, 0.04);
+    -fx-background-radius: 16;
+    -fx-padding: 10;
+    -fx-border-color: rgba(126, 154, 255, 0.12);
+    -fx-border-radius: 16;
+}
+
+.port {
+    -fx-stroke-width: 2;
+    -fx-stroke: rgba(255, 255, 255, 0.2);
+}
+
+.input-port {
+    -fx-fill: #54e0a0;
+}
+
+.output-port {
+    -fx-fill: #73c8ff;
+}
+
+.port:hover {
+    -fx-stroke: white;
+    -fx-scale-x: 1.2;
+    -fx-scale-y: 1.2;
+}
+
+.connection-line {
+    -fx-stroke: linear-gradient(from 0% 0% to 100% 0%, #73c8ff, #8e72ff);
+    -fx-stroke-width: 3.2;
+    -fx-opacity: 0.92;
+    -fx-effect: dropshadow(gaussian, rgba(115, 200, 255, 0.35), 12, 0.24, 0, 0);
 }
