@@ -1,9 +1,9 @@
 package com.cole;
 
+import com.cole.objects.node;
 import javafx.application.Application;
 import javafx.scene.Scene;
-import javafx.scene.control.Label;
-import javafx.scene.layout.StackPane;
+import javafx.scene.layout.Pane;
 import javafx.stage.Stage;
 
 
@@ -14,12 +14,17 @@ public class App extends Application {
 
     @Override
     public void start(Stage stage) {
-        var javaVersion = SystemInfo.javaVersion();
-        var javafxVersion = SystemInfo.javafxVersion();
+        var root = new Pane();
+        var editorNode = new node("Node Name", "Input", "Output");
+        var nodePane = editorNode.getPane();
 
-        var label = new Label("Hello, JavaFX " + javafxVersion + ", running on Java " + javaVersion + ".");
-        var scene = new Scene(new StackPane(label), 640, 480);
+        nodePane.setLayoutX(160);
+        nodePane.setLayoutY(120);
+        root.getChildren().add(nodePane);
+
+        var scene = new Scene(root, 640, 480);
         stage.setScene(scene);
+        stage.setTitle("Aphrodite's Ambassador");
         stage.show();
     }
 
