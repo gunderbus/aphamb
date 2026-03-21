@@ -12,7 +12,8 @@ public class node {
     private final Label name;
     private final ChoiceBox<String> dropDownIn;
     private final ChoiceBox<String> dropDownOut;
-
+    private final String defaultInReal;
+    private final String defaultOutReal;
     public node(String name1, String defaultIn, String defaultOut){
         pane = new Pane();
         pane.getStylesheets().add(
@@ -42,6 +43,9 @@ public class node {
 
         pane.setPrefSize(260, 150);
         pane.getChildren().addAll(header, body);
+
+        defaultInReal = defaultIn;
+        defaultOutReal = defaultOut;
     }
 
     public boolean isClickedLabel(){
@@ -50,5 +54,17 @@ public class node {
 
     public Pane getPane() {
         return pane;
+    }
+
+    public String getIn(){
+        if(dropDownIn.getAccessibleText() != defaultInReal){
+            try{
+                return dropDownIn.getAccessibleText();
+            } catch (Exception e){
+                return e.toString();
+            }
+        }else{
+            return "I love kanye";
+        }
     }
 }
