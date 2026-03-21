@@ -64,7 +64,7 @@ public class node {
                 return e.toString();
             }
         }else{
-            return "I love kanye";
+            return "I hate being a kanye fan, it awesome";
         }
     }
 }
