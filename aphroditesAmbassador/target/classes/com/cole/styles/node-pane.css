@@ -4,6 +4,45 @@
         radial-gradient(center 15% 15%, radius 120%, #20293d 0%, #131826 48%, #0a0f1a 100%);
 }
 
+.editor-toolbar {
+    -fx-background-color: rgba(9, 13, 22, 0.92);
+    -fx-border-color: transparent transparent rgba(126, 154, 255, 0.16) transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.toolbar-title {
+    -fx-text-fill: #f3f7ff;
+    -fx-font-size: 22px;
+    -fx-font-weight: 800;
+}
+
+.toolbar-subtitle {
+    -fx-text-fill: #8ea3d9;
+    -fx-font-size: 12px;
+}
+
+.editor-canvas {
+    -fx-background-color:
+        linear-gradient(to bottom, rgba(17, 24, 38, 0.88), rgba(9, 13, 22, 0.96));
+}
+
+.runner-panel {
+    -fx-background-color: rgba(9, 13, 22, 0.92);
+    -fx-border-color: rgba(126, 154, 255, 0.16) transparent transparent rgba(126, 154, 255, 0.12);
+    -fx-border-width: 0 0 0 1;
+}
+
+.panel-title {
+    -fx-text-fill: #f3f7ff;
+    -fx-font-size: 20px;
+    -fx-font-weight: 800;
+}
+
+.panel-subtitle {
+    -fx-text-fill: #8ea3d9;
+    -fx-font-size: 12px;
+}
+
 .node-pane {
     -fx-background-color: linear-gradient(to bottom, rgba(31, 39, 58, 0.96), rgba(18, 24, 38, 0.98));
     -fx-background-radius: 22;
@@ -13,16 +52,62 @@
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.48), 30, 0.24, 0, 14);
 }
 
+.start-node {
+    -fx-border-color: rgba(84, 224, 160, 0.45);
+}
+
+.decision-node {
+    -fx-border-color: rgba(115, 200, 255, 0.35);
+}
+
+.end-node {
+    -fx-border-color: rgba(255, 153, 120, 0.44);
+}
+
+.end-conversation-node {
+    -fx-border-color: rgba(255, 198, 108, 0.48);
+}
+
 .node-header {
     -fx-background-color: linear-gradient(to right, #67c6ff 0%, #7b8cff 100%);
     -fx-background-radius: 22 22 0 0;
     -fx-cursor: move;
 }
 
+.start-node .node-header {
+    -fx-background-color: linear-gradient(to right, #4fd598 0%, #8ff0b5 100%);
+}
+
+.end-node .node-header {
+    -fx-background-color: linear-gradient(to right, #ff9b73 0%, #ffc48f 100%);
+}
+
+.end-conversation-node .node-header {
+    -fx-background-color: linear-gradient(to right, #ffcf63 0%, #ff9963 100%);
+}
+
+.node-header-content {
+    -fx-alignment: top-left;
+}
+
 .node-title {
     -fx-text-fill: #0f1422;
     -fx-font-size: 16px;
     -fx-font-weight: 800;
+}
+
+.node-title-field {
+    -fx-background-color: rgba(255, 255, 255, 0.18);
+    -fx-background-radius: 12;
+    -fx-border-color: rgba(255, 255, 255, 0.22);
+    -fx-border-radius: 12;
+    -fx-text-fill: #0f1422;
+    -fx-font-weight: 800;
+    -fx-prompt-text-fill: rgba(15, 20, 34, 0.55);
+}
+
+.node-title-field:focused {
+    -fx-border-color: rgba(255, 255, 255, 0.9);
 }
 
 .node-body {
@@ -38,11 +123,19 @@
     -fx-font-size: 11px;
     -fx-font-weight: 700;
     -fx-text-fill: #8ea3d9;
-    -fx-letter-spacing: 0.8px;
+}
+
+.hint-label {
+    -fx-text-fill: #8ea3d9;
+    -fx-font-size: 12px;
 }
 
 .node-body .text-field,
-.node-body .text-area {
+.node-body .text-area,
+.node-body .choice-box,
+.runner-panel .text-field,
+.runner-panel .password-field,
+.runner-panel .text-area {
     -fx-background-color: rgba(10, 15, 26, 0.92);
     -fx-background-radius: 14;
     -fx-border-color: rgba(126, 154, 255, 0.28);
@@ -50,13 +143,40 @@
     -fx-border-width: 1.1;
     -fx-text-fill: #edf3ff;
     -fx-prompt-text-fill: #7382a8;
-    -fx-highlight-fill: #67c6ff;
-    -fx-highlight-text-fill: #08111d;
+}
+
+.node-body .text-field,
+.node-body .choice-box,
+.runner-panel .text-field,
+.runner-panel .password-field {
     -fx-padding: 10 12 10 12;
 }
 
+.node-body .text-area,
+.runner-panel .text-area {
+    -fx-padding: 8 10 8 10;
+}
+
+.node-body .text-area .content,
+.runner-panel .text-area .content {
+    -fx-background-color: rgba(10, 15, 26, 0.92);
+    -fx-background-radius: 14;
+}
+
+.node-body .choice-box .label {
+    -fx-text-fill: #edf3ff;
+}
+
+.node-body .choice-box .context-menu {
+    -fx-background-color: #12192a;
+}
+
 .node-body .text-field:focused,
-.node-body .text-area:focused {
+.node-body .text-area:focused,
+.node-body .choice-box:focused,
+.runner-panel .text-field:focused,
+.runner-panel .password-field:focused,
+.runner-panel .text-area:focused {
     -fx-border-color: #7bc6ff;
     -fx-effect: dropshadow(gaussian, rgba(103, 198, 255, 0.2), 14, 0.18, 0, 0);
 }
@@ -69,12 +189,39 @@
     -fx-padding: 8 14 8 14;
 }
 
-.node-body .button:hover {
+.node-body .button:hover,
+.add-node-button:hover {
     -fx-background-color: linear-gradient(to right, #78daff 0%, #7a9aff 100%);
 }
 
-.node-body .button:pressed {
+.node-body .button:pressed,
+.add-node-button:pressed {
     -fx-background-color: linear-gradient(to right, #4bbce8 0%, #5576df 100%);
+}
+
+.add-node-button {
+    -fx-background-color: linear-gradient(to right, #5ed1ff 0%, #6689ff 100%);
+    -fx-background-radius: 12;
+    -fx-text-fill: #0c1321;
+    -fx-font-weight: 800;
+    -fx-padding: 10 18 10 18;
+}
+
+.secondary-toolbar-button {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-background-radius: 12;
+    -fx-text-fill: #d9e1f8;
+    -fx-border-color: rgba(255, 255, 255, 0.1);
+    -fx-border-radius: 12;
+    -fx-padding: 10 16 10 16;
+}
+
+.secondary-toolbar-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.14);
+}
+
+.secondary-toolbar-button:disabled {
+    -fx-opacity: 0.45;
 }
 
 .secondary-button {
@@ -121,4 +268,10 @@
     -fx-stroke-width: 3.2;
     -fx-opacity: 0.92;
     -fx-effect: dropshadow(gaussian, rgba(115, 200, 255, 0.35), 12, 0.24, 0, 0);
+}
+
+.connection-line-selected {
+    -fx-stroke: linear-gradient(from 0% 0% to 100% 0%, #ffd86b, #ff8f6b);
+    -fx-stroke-width: 4.4;
+    -fx-effect: dropshadow(gaussian, rgba(255, 182, 107, 0.44), 14, 0.28, 0, 0);
 }

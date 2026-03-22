@@ -7,7 +7,9 @@ import javafx.geometry.Insets;
 import javafx.geometry.Point2D;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
+import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
@@ -18,51 +20,88 @@ import javafx.scene.shape.Circle;
 
 public class node {
     private final VBox pane;
-    private final Label name;
-    private final TextField inputField;
+    private final TextField nameField;
+    private final TextArea promptField;
+    private final ChoiceBox<String> nodeTypeChoice;
     private final VBox outputContainer;
     private final List<OutputRow> outputRows;
     private final Circle inputPort;
+    private final HBox inputRow;
+    private final HBox outputHeader;
+    private final Button addOutputButton;
+
     private OutputPortListener outputPortListener;
+    private boolean structureLocked;
 
     private double dragOffsetX;
     private double dragOffsetY;
 
-    public node(String name1, String defaultInput, List<OutputLink> defaultOutputs) {
+    public node(String name1, String prompt, List<OutputLink> defaultOutputs) {
+        this(name1, prompt, defaultOutputs, NodeKind.DECISION, false);
+    }
+
+    public node(String name1, String prompt, String defaultOutput) {
+        this(name1, prompt, List.of(new OutputLink(defaultOutput, "Next Node")));
+    }
+
+    public node(String name1, String prompt, List<OutputLink> defaultOutputs, NodeKind nodeKind, boolean locked) {
         pane = new VBox();
         pane.getStylesheets().add(
             node.class.getResource("/com/cole/styles/node-pane.css").toExternalForm()
         );
         pane.getStyleClass().add("node-pane");
-        pane.setPrefWidth(360);
+        pane.setPrefWidth(380);
         pane.setFillWidth(true);
 
-        name = new Label(name1);
-        name.getStyleClass().add("node-title");
+        nameField = new TextField(name1);
+        nameField.getStyleClass().addAll("node-title", "node-title-field");
 
-        var header = new HBox(name);
+        var titleBlock = new VBox(6);
+        var titleLabel = new Label("Node Name");
+        titleLabel.getStyleClass().add("section-label");
+
+        nodeTypeChoice = new ChoiceBox<>();
+        nodeTypeChoice.getItems().addAll(
+            NodeKind.START.getDisplayName(),
+            NodeKind.DECISION.getDisplayName(),
+            NodeKind.END.getDisplayName(),
+            NodeKind.END_CONVERSATION.getDisplayName()
+        );
+
+        var typeBlock = new VBox(6);
+        var typeLabel = new Label("Node Type");
+        typeLabel.getStyleClass().add("section-label");
+        typeBlock.getChildren().addAll(typeLabel, nodeTypeChoice);
+
+        var headerSpacer = new Region();
+        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+
+        var headerTop = new HBox(12, new VBox(6, titleLabel, nameField), headerSpacer, typeBlock);
+        headerTop.setAlignment(Pos.TOP_LEFT);
+        headerTop.getStyleClass().add("node-header-content");
+
+        var header = new VBox(headerTop);
         header.getStyleClass().add("node-header");
-        header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(14, 18, 14, 18));
         makeDraggable(header);
 
-        inputField = new TextField(defaultInput);
-        inputField.setPromptText("Input");
+        promptField = new TextArea(prompt);
+        promptField.setPromptText("Describe what the LLM should check or say at this step.");
+        promptField.setWrapText(true);
+        promptField.setPrefRowCount(4);
 
-        var inputLabel = new Label("Input");
-        inputLabel.getStyleClass().add("section-label");
+        var promptLabel = new Label("AI Prompt / Rule");
+        promptLabel.getStyleClass().add("section-label");
 
         inputPort = new Circle(6);
         inputPort.getStyleClass().addAll("port", "input-port");
-
-        var inputRow = new HBox(12, inputPort, inputField);
+        inputRow = new HBox(12, inputPort, buildHintLabel("Incoming Flow"));
         inputRow.setAlignment(Pos.CENTER_LEFT);
-        HBox.setHgrow(inputField, Priority.ALWAYS);
 
         outputContainer = new VBox(10);
         outputRows = new ArrayList<>();
 
-        var outputHeader = new HBox();
+        outputHeader = new HBox();
         outputHeader.setAlignment(Pos.CENTER_LEFT);
         outputHeader.setSpacing(10);
 
@@ -72,32 +111,81 @@ public class node {
         var spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        var addOutputButton = new Button("+ Output");
+        addOutputButton = new Button("+ Output");
         addOutputButton.setOnAction(event -> addOutput("", ""));
 
         outputHeader.getChildren().addAll(outputLabel, spacer, addOutputButton);
 
-        var body = new VBox(12, inputLabel, inputRow, outputHeader, outputContainer);
+        var body = new VBox(12, promptLabel, promptField, inputRow, outputHeader, outputContainer);
         body.getStyleClass().add("node-body");
         body.setPadding(new Insets(16));
 
         pane.getChildren().addAll(header, body);
 
-        if (defaultOutputs == null || defaultOutputs.isEmpty()) {
-            addOutput("Output", "Next Node");
-        } else {
+        if (defaultOutputs != null) {
             for (OutputLink output : defaultOutputs) {
                 addOutput(output.getLabel(), output.getLeadsTo());
             }
         }
+
+        nodeTypeChoice.setValue(nodeKind.getDisplayName());
+        nodeTypeChoice.getSelectionModel().selectedItemProperty().addListener((obs, oldValue, newValue) -> {
+            if (newValue != null) {
+                applyNodeKind(NodeKind.fromDisplayName(newValue));
+            }
+        });
+
+        structureLocked = locked;
+        applyNodeKind(nodeKind);
+        applyStructureLock(locked);
     }
 
-    public node(String name1, String defaultInput, String defaultOutput) {
-        this(name1, defaultInput, List.of(new OutputLink(defaultOutput, "Next Node")));
+    public static node createStartNode(String prompt) {
+        return new node(
+            "Start",
+            prompt,
+            List.of(new OutputLink("Begin", "")),
+            NodeKind.START,
+            true
+        );
     }
 
-    public boolean isClickedLabel() {
-        return name.isHover();
+    public static node createDecisionNode(String name, String prompt) {
+        return new node(
+            name,
+            prompt,
+            List.of(
+                new OutputLink("True", ""),
+                new OutputLink("False", "")
+            ),
+            NodeKind.DECISION,
+            false
+        );
+    }
+
+    public static node createEndNode(String prompt) {
+        return new node(
+            "End",
+            prompt,
+            new ArrayList<OutputLink>(),
+            NodeKind.END,
+            true
+        );
+    }
+
+    public static node createEndConversationNode(String prompt) {
+        return new node(
+            "End Conversation",
+            prompt,
+            new ArrayList<OutputLink>(),
+            NodeKind.END_CONVERSATION,
+            true
+        );
+    }
+
+    public static node createFromState(String name, String prompt, List<OutputLink> outputs, NodeKind kind) {
+        boolean locked = kind == NodeKind.START || kind == NodeKind.END || kind == NodeKind.END_CONVERSATION;
+        return new node(name, prompt, outputs, kind, locked);
     }
 
     public Pane getPane() {
@@ -108,8 +196,24 @@ public class node {
         return inputPort;
     }
 
-    public String getInput() {
-        return inputField.getText();
+    public boolean hasInputPort() {
+        return inputRow.isVisible();
+    }
+
+    public boolean hasOutputs() {
+        return !outputRows.isEmpty();
+    }
+
+    public String getNodeName() {
+        return nameField.getText();
+    }
+
+    public String getPrompt() {
+        return promptField.getText();
+    }
+
+    public NodeKind getNodeKind() {
+        return NodeKind.fromDisplayName(nodeTypeChoice.getValue());
     }
 
     public List<OutputLink> getOutputs() {
@@ -118,6 +222,12 @@ public class node {
             outputs.add(new OutputLink(row.outputNameField.getText(), row.leadsToField.getText()));
         }
         return outputs;
+    }
+
+    public void setOutputTarget(int index, String targetName) {
+        if (index >= 0 && index < outputRows.size()) {
+            outputRows.get(index).leadsToField.setText(targetName);
+        }
     }
 
     public List<Circle> getOutputPorts() {
@@ -153,18 +263,9 @@ public class node {
         }
     }
 
-    public boolean removeLastOutput() {
-        if (outputRows.isEmpty()) {
-            return false;
-        }
-
-        var removed = outputRows.remove(outputRows.size() - 1);
-        outputContainer.getChildren().remove(removed.container);
-        return true;
-    }
-
-    public int getOutputCount() {
-        return outputRows.size();
+    public void clearOutputs() {
+        outputRows.clear();
+        outputContainer.getChildren().clear();
     }
 
     public Point2D getInputPortSceneCenter() {
@@ -175,15 +276,17 @@ public class node {
         return getCircleCenterInScene(outputRows.get(index).outputPort);
     }
 
-    public Point2D sceneToLocal(Pane parent, Point2D scenePoint) {
-        return parent.sceneToLocal(scenePoint);
+    private Label buildHintLabel(String text) {
+        var label = new Label(text);
+        label.getStyleClass().add("hint-label");
+        return label;
     }
 
     private Point2D getCircleCenterInScene(Circle circle) {
         return circle.localToScene(circle.getCenterX(), circle.getCenterY());
     }
 
-    private void makeDraggable(HBox dragHandle) {
+    private void makeDraggable(VBox dragHandle) {
         dragHandle.setOnMousePressed(event -> {
             dragOffsetX = event.getSceneX() - pane.getLayoutX();
             dragOffsetY = event.getSceneY() - pane.getLayoutY();
@@ -193,6 +296,97 @@ public class node {
             pane.setLayoutX(event.getSceneX() - dragOffsetX);
             pane.setLayoutY(event.getSceneY() - dragOffsetY);
         });
+    }
+
+    private void applyNodeKind(NodeKind kind) {
+        pane.getStyleClass().removeAll("start-node", "decision-node", "end-node", "end-conversation-node");
+        pane.getStyleClass().add(kind.getStyleClass());
+
+        switch (kind) {
+            case START:
+                inputRow.setManaged(false);
+                inputRow.setVisible(false);
+                ensureExactOutputs(List.of(new OutputLink("Begin", "")));
+                promptField.setPromptText("Write the opening message or first AI instruction.");
+                break;
+            case DECISION:
+                inputRow.setManaged(true);
+                inputRow.setVisible(true);
+                if (outputRows.isEmpty()) {
+                    ensureExactOutputs(List.of(
+                        new OutputLink("True", ""),
+                        new OutputLink("False", "")
+                    ));
+                }
+                promptField.setPromptText("Describe the condition the LLM should evaluate as true or false.");
+                break;
+            case END:
+                inputRow.setManaged(true);
+                inputRow.setVisible(true);
+                ensureExactOutputs(new ArrayList<OutputLink>());
+                promptField.setPromptText("Write the ending response or action.");
+                break;
+            case END_CONVERSATION:
+                inputRow.setManaged(true);
+                inputRow.setVisible(true);
+                ensureExactOutputs(new ArrayList<OutputLink>());
+                promptField.setPromptText("Write the short closing line that ends the conversation.");
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void applyStructureLock(boolean locked) {
+        structureLocked = locked;
+        nameField.setEditable(!locked);
+        nodeTypeChoice.setDisable(locked);
+        addOutputButton.setDisable(locked);
+        outputHeader.setManaged(!getNodeKind().equals(NodeKind.END));
+        outputHeader.setVisible(!getNodeKind().equals(NodeKind.END));
+    }
+
+    private void ensureExactOutputs(List<OutputLink> outputs) {
+        clearOutputs();
+        for (OutputLink output : outputs) {
+            addOutput(output.getLabel(), output.getLeadsTo());
+        }
+
+        var showOutputTools = !outputs.isEmpty();
+        outputHeader.setManaged(showOutputTools);
+        outputHeader.setVisible(showOutputTools);
+    }
+
+    public enum NodeKind {
+        START("Start", "start-node"),
+        DECISION("Decision", "decision-node"),
+        END("End", "end-node"),
+        END_CONVERSATION("End Conversation", "end-conversation-node");
+
+        private final String displayName;
+        private final String styleClass;
+
+        NodeKind(String displayName, String styleClass) {
+            this.displayName = displayName;
+            this.styleClass = styleClass;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        public String getStyleClass() {
+            return styleClass;
+        }
+
+        public static NodeKind fromDisplayName(String value) {
+            for (NodeKind kind : values()) {
+                if (kind.displayName.equals(value)) {
+                    return kind;
+                }
+            }
+            return DECISION;
+        }
     }
 
     public static class OutputLink {
@@ -226,7 +420,7 @@ public class node {
 
         private OutputRow(String outputName, String leadsTo) {
             outputNameField = new TextField(outputName);
-            outputNameField.setPromptText("Output label");
+            outputNameField.setPromptText("Branch");
             outputNameField.getStyleClass().add("output-name-field");
             outputNameField.setPrefWidth(110);
 
@@ -239,6 +433,7 @@ public class node {
 
             var removeButton = new Button("Remove");
             removeButton.getStyleClass().add("secondary-button");
+            removeButton.setDisable(structureLocked);
 
             var labels = new VBox(6, outputNameField, leadsToField);
             HBox.setHgrow(labels, Priority.ALWAYS);
