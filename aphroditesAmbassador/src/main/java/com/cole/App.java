@@ -14,7 +14,11 @@ import java.util.List;
 import java.io.File;
 import java.nio.file.Files;
 import javafx.animation.AnimationTimer;
+import javafx.application.Platform;
 import javafx.application.Application;
+import javafx.beans.value.ChangeListener;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Point2D;
@@ -26,12 +30,14 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.scene.shape.CubicCurve;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -51,8 +57,10 @@ public class App extends Application {
     private File currentFlowchartFile;
 
     private Pane canvas;
+    private Pane world;
     private Pane lineLayer;
     private Pane nodeLayer;
+    private Canvas gridCanvas;
     private CubicCurve previewLine;
     private Connection selectedConnection;
     private Button deleteLineButton;
@@ -62,6 +70,20 @@ public class App extends Application {
     private TextField userMessageField;
     private TextField modelField;
     private TextField baseUrlField;
+    private double viewportScale = 1.0;
+    private double viewportTranslateX = 0;
+    private double viewportTranslateY = 0;
+    private double panStartTranslateX = 0;
+    private double panStartTranslateY = 0;
+    private double panStartSceneX = 0;
+    private double panStartSceneY = 0;
+    private boolean panning;
+
+    private static final double MIN_ZOOM = 0.45;
+    private static final double MAX_ZOOM = 2.25;
+    private static final double ZOOM_STEP = 1.12;
+    private static final double GRID_MINOR_SPACING = 40;
+    private static final double GRID_MAJOR_EVERY = 5;
 
     @Override
     public void start(Stage stage) {
@@ -75,17 +97,22 @@ public class App extends Application {
         canvas = new Pane();
         canvas.getStyleClass().add("editor-canvas");
 
+        gridCanvas = new Canvas();
+        gridCanvas.setMouseTransparent(true);
+        gridCanvas.widthProperty().bind(canvas.widthProperty());
+        gridCanvas.heightProperty().bind(canvas.heightProperty());
+
+        world = new Pane();
+        world.setPickOnBounds(false);
+
         lineLayer = new Pane();
         lineLayer.setPickOnBounds(false);
-        lineLayer.prefWidthProperty().bind(canvas.widthProperty());
-        lineLayer.prefHeightProperty().bind(canvas.heightProperty());
 
         nodeLayer = new Pane();
         nodeLayer.setPickOnBounds(false);
-        nodeLayer.prefWidthProperty().bind(canvas.widthProperty());
-        nodeLayer.prefHeightProperty().bind(canvas.heightProperty());
 
-        canvas.getChildren().addAll(lineLayer, nodeLayer);
+        world.getChildren().addAll(lineLayer, nodeLayer);
+        canvas.getChildren().addAll(gridCanvas, world);
         root.setCenter(canvas);
         root.setRight(buildRunnerPanel());
 
@@ -95,8 +122,11 @@ public class App extends Application {
         lineLayer.getChildren().add(previewLine);
 
         seedInitialGraph();
+        installViewportListeners();
         installCanvasHandlers();
         installConnectionUpdater();
+        centerWorkspace();
+        renderGrid();
 
         var scene = new Scene(root, 1560, 860);
         scene.getStylesheets().add(
@@ -111,6 +141,7 @@ public class App extends Application {
         stage.setScene(scene);
         stage.setTitle("Aphrodite's Ambassador");
         stage.show();
+        Platform.runLater(this::centerWorkspace);
     }
 
     private HBox buildToolbar() {
@@ -272,6 +303,7 @@ public class App extends Application {
 
     private void addNode(node currentNode) {
         nodes.add(currentNode);
+        currentNode.setDragCoordinateMapper(this::sceneToWorld);
         nodeLayer.getChildren().add(currentNode.getPane());
         registerOutputHandlers(currentNode);
         attachInputHandlers(currentNode);
@@ -303,13 +335,27 @@ public class App extends Application {
 
     private void attachInputHandlers(node targetNode) {
         targetNode.getInputPort().setOnMouseClicked(event -> {
-            finishConnection(targetNode);
-            event.consume();
+            if (finishConnection(targetNode)) {
+                event.consume();
+            }
         });
 
         targetNode.getInputPort().setOnMouseReleased(event -> {
-            finishConnection(targetNode);
-            event.consume();
+            if (finishConnection(targetNode)) {
+                event.consume();
+            }
+        });
+
+        targetNode.getPane().setOnMouseReleased(event -> {
+            if (finishConnection(targetNode)) {
+                event.consume();
+            }
+        });
+
+        targetNode.getPane().setOnMouseClicked(event -> {
+            if (finishConnection(targetNode)) {
+                event.consume();
+            }
         });
     }
 
@@ -319,8 +365,8 @@ public class App extends Application {
                 return;
             }
 
-            var start = toCanvas(dragState.sourceNode.getOutputPortSceneCenter(dragState.outputIndex));
-            updateCurve(previewLine, start, new Point2D(event.getX(), event.getY()));
+            var start = toWorld(dragState.sourceNode.getOutputPortSceneCenter(dragState.outputIndex));
+            updateCurve(previewLine, start, canvasPointToWorld(new Point2D(event.getX(), event.getY())));
         });
 
         canvas.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> {
@@ -328,15 +374,49 @@ public class App extends Application {
                 return;
             }
 
-            var start = toCanvas(dragState.sourceNode.getOutputPortSceneCenter(dragState.outputIndex));
-            updateCurve(previewLine, start, new Point2D(event.getX(), event.getY()));
+            var start = toWorld(dragState.sourceNode.getOutputPortSceneCenter(dragState.outputIndex));
+            updateCurve(previewLine, start, canvasPointToWorld(new Point2D(event.getX(), event.getY())));
         });
 
         canvas.setOnMousePressed(event -> {
             clearSelectedConnection();
-            if (event.getTarget() == canvas || event.getTarget() == lineLayer) {
+            if (isPanTrigger(event)) {
+                startPanning(event);
+                event.consume();
+                return;
+            }
+
+            if (event.getTarget() == canvas || event.getTarget() == lineLayer || event.getTarget() == gridCanvas) {
                 cancelPendingConnection();
             }
+        });
+
+        canvas.setOnMouseDragged(event -> {
+            if (!panning) {
+                return;
+            }
+
+            viewportTranslateX = panStartTranslateX + (event.getSceneX() - panStartSceneX);
+            viewportTranslateY = panStartTranslateY + (event.getSceneY() - panStartSceneY);
+            applyViewportTransform();
+            event.consume();
+        });
+
+        canvas.setOnMouseReleased(event -> {
+            if (panning) {
+                panning = false;
+                event.consume();
+            }
+        });
+
+        canvas.addEventFilter(ScrollEvent.SCROLL, event -> {
+            if (event.getDeltaY() == 0) {
+                return;
+            }
+
+            var zoomFactor = event.getDeltaY() > 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+            zoomAt(event.getSceneX(), event.getSceneY(), zoomFactor);
+            event.consume();
         });
     }
 
@@ -353,8 +433,8 @@ public class App extends Application {
                         continue;
                     }
 
-                    var start = toCanvas(connection.source.getOutputPortSceneCenter(connection.outputIndex));
-                    var end = toCanvas(connection.target.getInputPortSceneCenter());
+                    var start = toWorld(connection.source.getOutputPortSceneCenter(connection.outputIndex));
+                    var end = toWorld(connection.target.getInputPortSceneCenter());
                     updateCurve(connection.line, start, end);
                 }
             }
@@ -379,8 +459,8 @@ public class App extends Application {
         connections.add(connection);
         source.setOutputTarget(outputIndex, target.getNodeName());
 
-        var start = toCanvas(source.getOutputPortSceneCenter(outputIndex));
-        var end = toCanvas(target.getInputPortSceneCenter());
+        var start = toWorld(source.getOutputPortSceneCenter(outputIndex));
+        var end = toWorld(target.getInputPortSceneCenter());
         updateCurve(line, start, end);
     }
 
@@ -388,14 +468,14 @@ public class App extends Application {
         dragState.sourceNode = sourceNode;
         dragState.outputIndex = outputIndex;
 
-        var start = toCanvas(sourceNode.getOutputPortSceneCenter(outputIndex));
+        var start = toWorld(sourceNode.getOutputPortSceneCenter(outputIndex));
         updateCurve(previewLine, start, start);
         previewLine.setVisible(true);
     }
 
-    private void finishConnection(node targetNode) {
+    private boolean finishConnection(node targetNode) {
         if (dragState.sourceNode == null || dragState.sourceNode == targetNode) {
-            return;
+            return false;
         }
 
         var existing = findConnection(dragState.sourceNode, dragState.outputIndex);
@@ -413,6 +493,7 @@ public class App extends Application {
         }
 
         cancelPendingConnection();
+        return true;
     }
 
     private void cancelPendingConnection() {
@@ -587,6 +668,7 @@ public class App extends Application {
         connections.clear();
         selectedConnection = null;
         dragState.clear();
+        panning = false;
         deleteLineButton.setDisable(true);
         nodeLayer.getChildren().clear();
         lineLayer.getChildren().clear();
@@ -613,8 +695,120 @@ public class App extends Application {
         return curve;
     }
 
-    private Point2D toCanvas(Point2D scenePoint) {
-        return canvas.sceneToLocal(scenePoint);
+    private void installViewportListeners() {
+        ChangeListener<Number> redrawListener = (obs, oldValue, newValue) -> renderGrid();
+        canvas.widthProperty().addListener(redrawListener);
+        canvas.heightProperty().addListener(redrawListener);
+    }
+
+    private void centerWorkspace() {
+        if (canvas.getWidth() <= 0 || canvas.getHeight() <= 0) {
+            return;
+        }
+        viewportTranslateX = Math.max(120, canvas.getWidth() * 0.22);
+        viewportTranslateY = Math.max(100, canvas.getHeight() * 0.28);
+        applyViewportTransform();
+    }
+
+    private boolean isPanTrigger(MouseEvent event) {
+        return event.isMiddleButtonDown() || event.isSecondaryButtonDown();
+    }
+
+    private void startPanning(MouseEvent event) {
+        panning = true;
+        panStartSceneX = event.getSceneX();
+        panStartSceneY = event.getSceneY();
+        panStartTranslateX = viewportTranslateX;
+        panStartTranslateY = viewportTranslateY;
+    }
+
+    private void zoomAt(double sceneX, double sceneY, double zoomFactor) {
+        var clampedScale = clamp(viewportScale * zoomFactor, MIN_ZOOM, MAX_ZOOM);
+        if (Math.abs(clampedScale - viewportScale) < 0.0001) {
+            return;
+        }
+
+        var mouseInCanvas = canvas.sceneToLocal(sceneX, sceneY);
+        var worldPointBeforeZoom = canvasPointToWorld(mouseInCanvas);
+        viewportScale = clampedScale;
+        viewportTranslateX = mouseInCanvas.getX() - (worldPointBeforeZoom.getX() * viewportScale);
+        viewportTranslateY = mouseInCanvas.getY() - (worldPointBeforeZoom.getY() * viewportScale);
+        applyViewportTransform();
+    }
+
+    private void applyViewportTransform() {
+        world.setScaleX(viewportScale);
+        world.setScaleY(viewportScale);
+        world.setTranslateX(viewportTranslateX);
+        world.setTranslateY(viewportTranslateY);
+        renderGrid();
+    }
+
+    private void renderGrid() {
+        if (gridCanvas == null) {
+            return;
+        }
+
+        var width = gridCanvas.getWidth();
+        var height = gridCanvas.getHeight();
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+
+        GraphicsContext graphics = gridCanvas.getGraphicsContext2D();
+        graphics.clearRect(0, 0, width, height);
+
+        graphics.setFill(Color.rgb(12, 18, 30, 0.92));
+        graphics.fillRect(0, 0, width, height);
+
+        double scaledMinor = GRID_MINOR_SPACING * viewportScale;
+        double scaledMajor = scaledMinor * GRID_MAJOR_EVERY;
+
+        drawGridLines(graphics, width, height, scaledMinor, Color.rgb(126, 154, 255, 0.08));
+        drawGridLines(graphics, width, height, scaledMajor, Color.rgb(126, 154, 255, 0.16));
+    }
+
+    private void drawGridLines(GraphicsContext graphics, double width, double height, double spacing, Color color) {
+        if (spacing < 8) {
+            return;
+        }
+
+        graphics.setStroke(color);
+        graphics.setLineWidth(1);
+
+        double offsetX = positiveModulo(viewportTranslateX, spacing);
+        for (double x = offsetX; x <= width; x += spacing) {
+            graphics.strokeLine(x, 0, x, height);
+        }
+
+        double offsetY = positiveModulo(viewportTranslateY, spacing);
+        for (double y = offsetY; y <= height; y += spacing) {
+            graphics.strokeLine(0, y, width, y);
+        }
+    }
+
+    private double positiveModulo(double value, double modulus) {
+        if (modulus == 0) {
+            return 0;
+        }
+        double result = value % modulus;
+        return result < 0 ? result + modulus : result;
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private Point2D sceneToWorld(Point2D scenePoint) {
+        return world.sceneToLocal(scenePoint);
+    }
+
+    private Point2D canvasPointToWorld(Point2D canvasPoint) {
+        return sceneToWorld(canvas.localToScene(canvasPoint));
+    }
+
+    private Point2D toWorld(Point2D scenePoint) {
+        return sceneToWorld(scenePoint);
     }
 
     private void updateCurve(CubicCurve curve, Point2D start, Point2D end) {

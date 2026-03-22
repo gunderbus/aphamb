@@ -2,6 +2,7 @@ package com.cole.objects;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Point2D;
@@ -35,6 +36,7 @@ public class node {
 
     private double dragOffsetX;
     private double dragOffsetY;
+    private Function<Point2D, Point2D> dragCoordinateMapper = Function.identity();
 
     public node(String name1, String prompt, List<OutputLink> defaultOutputs) {
         this(name1, prompt, defaultOutputs, NodeKind.DECISION, false);
@@ -121,6 +123,7 @@ public class node {
         body.setPadding(new Insets(16));
 
         pane.getChildren().addAll(header, body);
+        pane.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> pane.toFront());
 
         if (defaultOutputs != null) {
             for (OutputLink output : defaultOutputs) {
@@ -288,14 +291,20 @@ public class node {
 
     private void makeDraggable(VBox dragHandle) {
         dragHandle.setOnMousePressed(event -> {
-            dragOffsetX = event.getSceneX() - pane.getLayoutX();
-            dragOffsetY = event.getSceneY() - pane.getLayoutY();
+            var dragPoint = dragCoordinateMapper.apply(new Point2D(event.getSceneX(), event.getSceneY()));
+            dragOffsetX = dragPoint.getX() - pane.getLayoutX();
+            dragOffsetY = dragPoint.getY() - pane.getLayoutY();
         });
 
         dragHandle.setOnMouseDragged(event -> {
-            pane.setLayoutX(event.getSceneX() - dragOffsetX);
-            pane.setLayoutY(event.getSceneY() - dragOffsetY);
+            var dragPoint = dragCoordinateMapper.apply(new Point2D(event.getSceneX(), event.getSceneY()));
+            pane.setLayoutX(dragPoint.getX() - dragOffsetX);
+            pane.setLayoutY(dragPoint.getY() - dragOffsetY);
         });
+    }
+
+    public void setDragCoordinateMapper(Function<Point2D, Point2D> dragCoordinateMapper) {
+        this.dragCoordinateMapper = dragCoordinateMapper == null ? Function.identity() : dragCoordinateMapper;
     }
 
     private void applyNodeKind(NodeKind kind) {
