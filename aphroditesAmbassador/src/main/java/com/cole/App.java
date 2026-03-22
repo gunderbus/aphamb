@@ -12,13 +12,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
-import javafx.animation.AnimationTimer;
 import javafx.application.Platform;
 import javafx.application.Application;
 import javafx.beans.value.ChangeListener;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.CacheHint;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Point2D;
@@ -67,6 +68,8 @@ public class App extends Application {
     private Button runFlowButton;
     private TextArea transcriptArea;
     private TextArea traversalArea;
+    private TextArea styleContextArea;
+    private Label styleContextStatusLabel;
     private TextField userMessageField;
     private TextField modelField;
     private TextField baseUrlField;
@@ -104,6 +107,8 @@ public class App extends Application {
 
         world = new Pane();
         world.setPickOnBounds(false);
+        world.setCache(true);
+        world.setCacheHint(CacheHint.SPEED);
 
         lineLayer = new Pane();
         lineLayer.setPickOnBounds(false);
@@ -178,6 +183,13 @@ public class App extends Application {
         loadButton.getStyleClass().add("secondary-toolbar-button");
         loadButton.setOnAction(event -> loadFlowchart());
 
+        var uploadStyleButton = new Button("Upload Style Context");
+        uploadStyleButton.getStyleClass().add("secondary-toolbar-button");
+        uploadStyleButton.setOnAction(event -> uploadStyleContextFile());
+
+        styleContextStatusLabel = new Label("No style file loaded");
+        styleContextStatusLabel.getStyleClass().add("toolbar-status-label");
+
         deleteLineButton = new Button("Delete Selected Line");
         deleteLineButton.getStyleClass().add("secondary-toolbar-button");
         deleteLineButton.setDisable(true);
@@ -190,6 +202,8 @@ public class App extends Application {
             saveAsButton,
             saveButton,
             loadButton,
+            uploadStyleButton,
+            styleContextStatusLabel,
             deleteLineButton,
             addEndNodeButton,
             addNodeButton
@@ -229,6 +243,12 @@ public class App extends Application {
         transcriptArea.setWrapText(true);
         transcriptArea.setPrefRowCount(14);
 
+        styleContextArea = new TextArea();
+        styleContextArea.setPromptText("Paste style guidance here or upload a .txt / .md file to imitate its voice.");
+        styleContextArea.setWrapText(true);
+        styleContextArea.setPrefRowCount(8);
+        styleContextArea.textProperty().addListener((obs, oldValue, newValue) -> updateStyleContextStatus(null));
+
         traversalArea = new TextArea();
         traversalArea.setPromptText("Chosen node path will appear here.");
         traversalArea.setWrapText(true);
@@ -242,6 +262,7 @@ public class App extends Application {
             labeledField("Base URL", baseUrlField),
             labeledField("Model", modelField),
             labeledField("User Message", userMessageField),
+            labeledField("Style Context", styleContextArea),
             runFlowButton,
             labeledField("Transcript", transcriptArea),
             labeledField("Traversal", traversalArea)
@@ -305,6 +326,9 @@ public class App extends Application {
         nodes.add(currentNode);
         currentNode.setDragCoordinateMapper(this::sceneToWorld);
         nodeLayer.getChildren().add(currentNode.getPane());
+        currentNode.getPane().layoutXProperty().addListener((obs, oldValue, newValue) -> updateConnectionsForNode(currentNode));
+        currentNode.getPane().layoutYProperty().addListener((obs, oldValue, newValue) -> updateConnectionsForNode(currentNode));
+        currentNode.getPane().boundsInParentProperty().addListener((obs, oldValue, newValue) -> updateConnectionsForNode(currentNode));
         registerOutputHandlers(currentNode);
         attachInputHandlers(currentNode);
     }
@@ -421,25 +445,7 @@ public class App extends Application {
     }
 
     private void installConnectionUpdater() {
-        var lineUpdater = new AnimationTimer() {
-            @Override
-            public void handle(long now) {
-                for (Connection connection : connections) {
-                    if (!connection.source.hasOutputs() || !connection.target.hasInputPort()) {
-                        continue;
-                    }
-
-                    if (connection.outputIndex >= connection.source.getOutputs().size()) {
-                        continue;
-                    }
-
-                    var start = toWorld(connection.source.getOutputPortSceneCenter(connection.outputIndex));
-                    var end = toWorld(connection.target.getInputPortSceneCenter());
-                    updateCurve(connection.line, start, end);
-                }
-            }
-        };
-        lineUpdater.start();
+        updateAllConnections();
     }
 
     private Connection findConnection(node source, int outputIndex) {
@@ -458,10 +464,7 @@ public class App extends Application {
         lineLayer.getChildren().add(line);
         connections.add(connection);
         source.setOutputTarget(outputIndex, target.getNodeName());
-
-        var start = toWorld(source.getOutputPortSceneCenter(outputIndex));
-        var end = toWorld(target.getInputPortSceneCenter());
-        updateCurve(line, start, end);
+        updateConnectionGeometry(connection);
     }
 
     private void startConnectionSelection(node sourceNode, int outputIndex) {
@@ -482,6 +485,7 @@ public class App extends Application {
         if (existing != null) {
             existing.target = targetNode;
             dragState.sourceNode.setOutputTarget(dragState.outputIndex, targetNode.getNodeName());
+            updateConnectionGeometry(existing);
             clearSelectedConnection();
         } else {
             var connectionLine = createConnectionLine();
@@ -490,6 +494,7 @@ public class App extends Application {
             lineLayer.getChildren().add(0, connectionLine);
             connections.add(connection);
             dragState.sourceNode.setOutputTarget(dragState.outputIndex, targetNode.getNodeName());
+            updateConnectionGeometry(connection);
         }
 
         cancelPendingConnection();
@@ -570,6 +575,7 @@ public class App extends Application {
             saveData.baseUrl = baseUrlField.getText();
             saveData.model = modelField.getText();
             saveData.transcript = transcriptArea.getText();
+            saveData.styleContext = styleContextArea.getText();
 
             var nodeIds = new HashMap<node, String>();
             for (int i = 0; i < nodes.size(); i++) {
@@ -630,6 +636,8 @@ public class App extends Application {
                 modelField.setText(saveData.model);
             }
             transcriptArea.setText(saveData.transcript == null ? "" : saveData.transcript);
+            styleContextArea.setText(saveData.styleContext == null ? "" : saveData.styleContext);
+            updateStyleContextStatus(file.getName());
             traversalArea.clear();
 
             var nodeMap = new HashMap<String, node>();
@@ -854,6 +862,7 @@ public class App extends Application {
         }
 
         var existingTranscript = transcriptArea.getText();
+        var styleContext = styleContextArea.getText();
 
         Task<FlowRunner.RunResult> task = new Task<>() {
             @Override
@@ -863,6 +872,7 @@ public class App extends Application {
                     model,
                     userMessage,
                     existingTranscript,
+                    styleContext,
                     snapshotNodes,
                     snapshotConnections
                 );
@@ -900,6 +910,76 @@ public class App extends Application {
         transcriptArea.appendText(speaker + ": " + text);
     }
 
+    private void uploadStyleContextFile() {
+        var chooser = new FileChooser();
+        chooser.setTitle("Upload Style Context");
+        chooser.getExtensionFilters().addAll(
+            new FileChooser.ExtensionFilter("Text Files", "*.txt", "*.md", "*.text"),
+            new FileChooser.ExtensionFilter("All Files", "*.*")
+        );
+
+        var file = chooser.showOpenDialog(primaryStage);
+        if (file == null) {
+            return;
+        }
+
+        try {
+            var content = Files.readString(file.toPath());
+            if (content.isBlank()) {
+                traversalArea.setText("The selected style context file was empty.");
+                return;
+            }
+
+            styleContextArea.setText(content);
+            updateStyleContextStatus(file.getName());
+            traversalArea.setText("Loaded style context from " + file.getAbsolutePath());
+        } catch (IOException e) {
+            traversalArea.setText("Could not read style context file: " + e.getMessage());
+        }
+    }
+
+    private void updateStyleContextStatus(String sourceName) {
+        if (styleContextStatusLabel == null) {
+            return;
+        }
+
+        if (sourceName != null && !sourceName.isBlank()) {
+            styleContextStatusLabel.setText("Style: " + sourceName);
+            return;
+        }
+
+        var text = styleContextArea == null ? "" : styleContextArea.getText();
+        styleContextStatusLabel.setText(text == null || text.isBlank() ? "No style file loaded" : "Style context ready");
+    }
+
+    private void updateConnectionsForNode(node currentNode) {
+        for (Connection connection : connections) {
+            if (connection.source == currentNode || connection.target == currentNode) {
+                updateConnectionGeometry(connection);
+            }
+        }
+    }
+
+    private void updateAllConnections() {
+        for (Connection connection : connections) {
+            updateConnectionGeometry(connection);
+        }
+    }
+
+    private void updateConnectionGeometry(Connection connection) {
+        if (!connection.source.hasOutputs() || !connection.target.hasInputPort()) {
+            return;
+        }
+
+        if (connection.outputIndex >= connection.source.getOutputs().size()) {
+            return;
+        }
+
+        var start = toWorld(connection.source.getOutputPortSceneCenter(connection.outputIndex));
+        var end = toWorld(connection.target.getInputPortSceneCenter());
+        updateCurve(connection.line, start, end);
+    }
+
     public static void main(String[] args) {
         launch();
     }
@@ -932,6 +1012,7 @@ public class App extends Application {
         private String baseUrl;
         private String model;
         private String transcript;
+        private String styleContext;
         private List<SavedNode> nodes = new ArrayList<>();
         private List<SavedConnection> connections = new ArrayList<>();
     }

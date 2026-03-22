@@ -21,6 +21,7 @@ public class FlowRunner {
         String model,
         String userMessage,
         String transcript,
+        String styleContext,
         List<node> nodes,
         List<FlowConnection> connections
     ) throws IOException, InterruptedException {
@@ -47,7 +48,15 @@ public class FlowRunner {
             if (currentNode.getNodeKind() == NodeKind.START
                 || currentNode.getNodeKind() == NodeKind.END
                 || currentNode.getNodeKind() == NodeKind.END_CONVERSATION) {
-                var generated = generateAssistantText(baseUrl, model, currentNode, userMessage, transcript, assistantBuilder.toString());
+                var generated = generateAssistantText(
+                    baseUrl,
+                    model,
+                    currentNode,
+                    userMessage,
+                    transcript,
+                    styleContext,
+                    assistantBuilder.toString()
+                );
                 if (!generated.isBlank()) {
                     if (assistantBuilder.length() > 0) {
                         assistantBuilder.append("\n\n");
@@ -142,15 +151,18 @@ public class FlowRunner {
         node currentNode,
         String userMessage,
         String transcript,
+        String styleContext,
         String generatedAssistantText
     ) throws IOException, InterruptedException {
         var prompt =
             "You are the assistant speaking to the user. Follow the flowchart node prompt exactly and respond naturally. "
-                + "Keep the reply brief: one or two short sentences unless the node prompt explicitly asks for more.\n\n"
+                + "Keep the reply brief: one or two short sentences unless the node prompt explicitly asks for more.\n"
+                + "If style context is provided, imitate its tone, rhythm, word choice, and overall voice as closely as practical while still answering the user and following the node prompt.\n\n"
                 + "Node name: " + currentNode.getNodeName() + "\n"
                 + "Node type: " + currentNode.getNodeKind().getDisplayName() + "\n"
                 + "Node prompt: " + currentNode.getPrompt() + "\n"
                 + "Conversation transcript so far:\n" + safeText(transcript) + "\n"
+                + "Style context to imitate:\n" + safeText(styleContext) + "\n"
                 + "Assistant text generated so far:\n" + safeText(generatedAssistantText) + "\n"
                 + "Latest user message:\n" + userMessage;
 

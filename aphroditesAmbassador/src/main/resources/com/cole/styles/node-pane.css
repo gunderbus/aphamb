@@ -21,6 +21,12 @@
     -fx-font-size: 12px;
 }
 
+.toolbar-status-label {
+    -fx-text-fill: #8ea3d9;
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+}
+
 .editor-canvas {
     -fx-background-color:
         linear-gradient(to bottom, rgba(17, 24, 38, 0.88), rgba(9, 13, 22, 0.96));
