@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Aphrodites Ambassador
+Exec=aphrodites-ambassador
+Type=Application
+Categories=Utility;
+Terminal=false

@@ -1,0 +1,40 @@
+{
+  "app-id": "com.cole.AphroditesAmbassador",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "24.08",
+  "sdk": "org.freedesktop.Sdk",
+  "command": "aphrodites-ambassador",
+  "finish-args": [
+    "--share=network",
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--device=dri"
+  ],
+  "modules": [
+    {
+      "name": "aphrodites-ambassador",
+      "buildsystem": "simple",
+      "build-commands": [
+        "mkdir -p /app/AphroditesAmbassador",
+        "cp -R AphroditesAmbassador/. /app/AphroditesAmbassador/",
+        "install -Dm755 aphrodites-ambassador /app/bin/aphrodites-ambassador",
+        "install -Dm644 com.cole.AphroditesAmbassador.desktop /app/share/applications/com.cole.AphroditesAmbassador.desktop"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "../../dist/linux/AphroditesAmbassador",
+          "dest": "AphroditesAmbassador"
+        },
+        {
+          "type": "file",
+          "path": "aphrodites-ambassador"
+        },
+        {
+          "type": "file",
+          "path": "com.cole.AphroditesAmbassador.desktop"
+        }
+      ]
+    }
+  ]
+}

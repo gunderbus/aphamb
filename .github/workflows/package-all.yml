@@ -1,0 +1,151 @@
+name: package-all
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: aphroditesAmbassador
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install WiX
+        run: choco install wixtoolset --no-progress
+
+      - name: Build Jar And Dependencies
+        run: mvn -B clean package dependency:copy-dependencies -DoutputDirectory=target/dependencies
+
+      - name: Prepare Packaging Input
+        run: |
+          New-Item -ItemType Directory -Force -Path target/package-input | Out-Null
+          Copy-Item target/my-javafx-app-1.0-SNAPSHOT.jar target/package-input/
+          Copy-Item target/dependencies/*.jar target/package-input/
+
+      - name: Build EXE
+        run: |
+          jpackage `
+            --type exe `
+            --name AphroditesAmbassador `
+            --input target/package-input `
+            --main-jar my-javafx-app-1.0-SNAPSHOT.jar `
+            --main-class com.cole.App `
+            --dest dist/windows `
+            --vendor Cole `
+            --win-dir-chooser `
+            --win-shortcut `
+            --win-menu
+
+      - name: Upload EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: AphroditesAmbassador-windows-exe
+          path: aphroditesAmbassador/dist/windows/*.exe
+
+  build-macos-dmg:
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: aphroditesAmbassador
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Build Jar And Dependencies
+        run: mvn -B clean package dependency:copy-dependencies -DoutputDirectory=target/dependencies
+
+      - name: Prepare Packaging Input
+        run: |
+          mkdir -p target/package-input
+          cp target/my-javafx-app-1.0-SNAPSHOT.jar target/package-input/
+          cp target/dependencies/*.jar target/package-input/
+
+      - name: Build DMG
+        run: |
+          jpackage \
+            --type dmg \
+            --name AphroditesAmbassador \
+            --input target/package-input \
+            --main-jar my-javafx-app-1.0-SNAPSHOT.jar \
+            --main-class com.cole.App \
+            --dest dist/macos \
+            --vendor Cole
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: AphroditesAmbassador-macos-dmg
+          path: aphroditesAmbassador/dist/macos/*.dmg
+
+  build-linux-flatpak:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: aphroditesAmbassador
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Flatpak Tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+
+      - name: Set Up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Build Jar And Dependencies
+        run: mvn -B clean package dependency:copy-dependencies -DoutputDirectory=target/dependencies
+
+      - name: Prepare Packaging Input
+        run: |
+          mkdir -p target/package-input
+          cp target/my-javafx-app-1.0-SNAPSHOT.jar target/package-input/
+          cp target/dependencies/*.jar target/package-input/
+
+      - name: Build Linux App Image
+        run: |
+          jpackage \
+            --type app-image \
+            --name AphroditesAmbassador \
+            --input target/package-input \
+            --main-jar my-javafx-app-1.0-SNAPSHOT.jar \
+            --main-class com.cole.App \
+            --dest dist/linux \
+            --vendor Cole
+
+      - name: Add Flatpak Runtime
+        run: |
+          flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
+
+      - name: Build Flatpak
+        run: |
+          flatpak-builder --force-clean build-dir packaging/flatpak/com.cole.AphroditesAmbassador.json
+          flatpak build-export repo build-dir
+          mkdir -p dist/linux/flatpak
+          flatpak build-bundle repo dist/linux/flatpak/AphroditesAmbassador.flatpak com.cole.AphroditesAmbassador
+
+      - name: Upload Flatpak
+        uses: actions/upload-artifact@v4
+        with:
+          name: AphroditesAmbassador-linux-flatpak
+          path: aphroditesAmbassador/dist/linux/flatpak/*.flatpak
